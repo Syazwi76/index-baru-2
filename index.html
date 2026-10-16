@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#152B54">
+<title>Your AI Journey Starts Here.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #152B54;
+    --teal: #158F86;
+    --mint: #A9E8D6;
+    --text: #EDEFF6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--navy); overflow: hidden; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  #field {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+  }
+  .hero {
+    position: relative; z-index: 1;
+    min-height: 100vh; min-height: 100dvh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 24px;
+    text-align: center;
+    pointer-events: none;
+    user-select: none; -webkit-user-select: none;
+  }
+  .copy { display: flex; flex-direction: column; align-items: center; }
+  h1 {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 700;
+    font-size: clamp(2.6rem, 6.4vw, 5.6rem);
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    max-width: 15ch;
+    text-shadow: 0 4px 30px rgba(21, 43, 84, 0.95), 0 0 80px rgba(21, 43, 84, 0.9);
+  }
+  h1 .w {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(0.6em);
+    filter: blur(10px);
+  }
+  .ready h1 .w {
+    animation: rise 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: calc(0.35s + var(--i) * 0.11s);
+  }
+  .rule {
+    width: 60px; height: 2px;
+    background: var(--mint);
+    margin: 32px auto 28px;
+    transform: scaleX(0);
+    transform-origin: center;
+  }
+  .ready .rule { animation: grow 1s cubic-bezier(0.16, 1, 0.3, 1) 1.15s forwards; }
+  .sub {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-weight: 400;
+    font-size: clamp(1rem, 1.5vw, 1.3rem);
+    line-height: 1.6;
+    color: rgba(237, 239, 246, 0.8);
+    max-width: 46ch;
+    opacity: 0;
+    transform: translateY(14px);
+    text-shadow: 0 2px 20px rgba(21, 43, 84, 0.9);
+  }
+  .ready .sub { animation: fade 1.2s cubic-bezier(0.16, 1, 0.3, 1) 1.45s forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; filter: blur(0); } }
+  @keyframes grow { to { transform: scaleX(1); } }
+  @keyframes fade { to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    h1 .w, .rule, .sub { animation-duration: 0.6s !important; filter: none !important; }
+  }
+  @media (max-width: 480px) {
+    .rule { margin: 24px auto 20px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="field" aria-hidden="true"></canvas>
+
+<main class="hero">
+  <div class="copy">
+    <h1 aria-label="Your AI Journey Starts Here.">
+      <span class="w" style="--i:0" aria-hidden="true">Your</span>
+      <span class="w" style="--i:1" aria-hidden="true">AI</span>
+      <span class="w" style="--i:2" aria-hidden="true">Journey</span>
+      <span class="w" style="--i:3" aria-hidden="true">Starts</span>
+      <span class="w" style="--i:4" aria-hidden="true">Here.</span>
+    </h1>
+    <div class="rule" role="presentation"></div>
+    <p class="sub">Half your team is already using AI. The other half is waiting for a clear path forward.</p>
+  </div>
+</main>
+
+<script>
+(() => {
+  'use strict';
+  const canvas = document.getElementById('field');
+  const ctx = canvas.getContext('2d', { alpha: false });
+
+  const NAVY = '#152B54';
+  const TEAL = [21, 143, 134];
+  const MINT = [169, 232, 214];
+  const STEPS = 48;
+  const GA = Math.PI * (3 - Math.sqrt(5));
+  const PLASTIC = 1.324717957244746;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const HOLD = reduce ? 9000 : 5200;
+  const DUR = reduce ? 4200 : 2600;
+
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const rnd = i => { const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+
+  let W = 0, H = 0, DPR = 1, R = 300, FOV = 1080, LINK = 28, MR = 150, N = 0, links = true;
+  let X, Y, Z, FX, FY, FZ, TX, TY, TZ, DELAY, PH, OX, OY, BO, SX, SY, ZR, SC, T, FADE, CELL, ORDER, HEAD, NEXT;
+  let gw = 0, gh = 0;
+  let shape = 0, morphStart = 0, fromTilt = 0.15, fromAmp = 0.02, curTilt = 0.15, curAmp = 0.02;
+  let rotY = 0, rotOff = 0, tRotOff = 0, tiltM = 0, tTiltM = 0;
+  const mouse = { x: -1e4, y: -1e4, active: false };
+  const box = { cx: 0, cy: 0, rx: 1, ry: 1 };
+  const sprites = [], RGB = [];
+  const NB_C = 12, NB_A = 6, LINE_A = 0.3;
+  const buckets = Array.from({ length: NB_C * NB_A }, () => []);
+  let last = performance.now(), start = last, hiddenAt = 0;
+
+  function mix(t) {
+    return [
+      Math.round(lerp(TEAL[0], MINT[0], t)),
+      Math.round(lerp(TEAL[1], MINT[1], t)),
+      Math.round(lerp(TEAL[2], MINT[2], t))
+    ];
+  }
+
+  function buildSprites() {
+    for (let i = 0; i < STEPS; i++) {
+      const c = mix(i / (STEPS - 1));
+      const rgb = c[0] + ',' + c[1] + ',' + c[2];
+      RGB.push(rgb);
+      const s = 64;
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = s;
+      const g = cv.getContext('2d');
+      const grd = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+      grd.addColorStop(0.00, 'rgba(' + rgb + ',1)');
+      grd.addColorStop(0.16, 'rgba(' + rgb + ',0.95)');
+      grd.addColorStop(0.30, 'rgba(' + rgb + ',0.35)');
+      grd.addColorStop(0.60, 'rgba(' + rgb + ',0.08)');
+      grd.addColorStop(1.00, 'rgba(' + rgb + ',0)');
+      g.fillStyle = grd;
+      g.fillRect(0, 0, s, s);
+      sprites.push(cv);
+    }
+  }
+
+  const shapes = [
+    { name: 'sphere', tilt: 0.15, amp: 0.02, fn(i, n, o) {
+        const y = 1 - 2 * (i + 0.5) / n;
+        const r = Math.sqrt(Math.max(0, 1 - y * y));
+        const th = i * GA;
+        o[0] = R * r * Math.cos(th); o[1] = R * y; o[2] = R * r * Math.sin(th);
+      } },
+    { name: 'helix', tilt: 0.2, amp: 0.015, fn(i, n, o) {
+        const f = i / n, strand = i & 1, turns = 3.2, rr = R * 0.42;
+        const y = (f - 0.5) * 2 * R * 1.05;
+        const a0 = f * Math.PI * 2 * turns;
+        if (i % 9 === 0) {
+          const k = rnd(i) * 2 - 1;
+          o[0] = rr * Math.cos(a0) * k; o[1] = y; o[2] = rr * Math.sin(a0) * k;
+        } else {
+          const ang = a0 + strand * Math.PI;
+          o[0] = rr * Math.cos(ang); o[1] = y; o[2] = rr * Math.sin(ang);
+        }
+      } },
+    { name: 'torus', tilt: 0.8, amp: 0.02, fn(i, n, o) {
+        const u = i * GA;
+        const v = ((i * PLASTIC) % 1) * Math.PI * 2;
+        const Rm = R * 0.74, rm = R * 0.3;
+        const w = Rm + rm * Math.cos(v);
+        o[0] = w * Math.cos(u); o[1] = rm * Math.sin(v); o[2] = w * Math.sin(u);
+      } },
+    { name: 'wave', tilt: 0.6, amp: 0.14, fn(i, n, o) {
+        const cols = Math.ceil(Math.sqrt(n * 1.7));
+        const rows = Math.ceil(n / cols);
+        const c = i % cols, r = Math.floor(i / cols);
+        o[0] = (c / (cols - 1) - 0.5) * R * 3.0;
+        o[1] = 0;
+        o[2] = (r / Math.max(1, rows - 1) - 0.5) * R * 2.0;
+      } },
+    { name: 'galaxy', tilt: 0.55, amp: 0.02, fn(i, n, o) {
+        const arms = 3, arm = i % arms;
+        const f = Math.floor(i / arms) / Math.ceil(n / arms);
+        const r = R * 1.4 * Math.sqrt(f) + R * 0.03;
+        const jitter = (rnd(i + 5) - 0.5) * (0.9 - 0.6 * f);
+        const ang = arm * 2 * Math.PI / arms + (r / R) * 2.4 + jitter;
+        o[0] = r * Math.cos(ang);
+        o[1] = (rnd(i + 9) - 0.5) * R * 0.16 * (1.1 - f);
+        o[2] = r * Math.sin(ang);
+      } },
+    { name: 'cube', tilt: 0.5, amp: 0.01, fn(i, n, o) {
+        const s = Math.floor(Math.cbrt(n));
+        const total = s * s * s;
+        const side = R * 1.5;
+        if (i < total) {
+          const a = i % s, b = Math.floor(i / s) % s, c = Math.floor(i / (s * s));
+          const step = side / (s - 1), h = (s - 1) / 2;
+          o[0] = (a - h) * step; o[1] = (b - h) * step; o[2] = (c - h) * step;
+        } else {
+          o[0] = (rnd(i) - 0.5) * side; o[1] = (rnd(i + 1) - 0.5) * side; o[2] = (rnd(i + 2) - 0.5) * side;
+        }
+      } }
+  ];
+
+  function alloc(n) {
+    N = n;
+    const F = () => new Float32Array(n);
+    X = F(); Y = F(); Z = F(); FX = F(); FY = F(); FZ = F(); TX = F(); TY = F(); TZ = F();
+    DELAY = F(); PH = F(); OX = F(); OY = F(); BO = F(); SX = F(); SY = F(); ZR = F(); SC = F(); T = F(); FADE = F();
+    CELL = new Int32Array(n); ORDER = new Int32Array(n); NEXT = new Int32Array(n);
+    for (let i = 0; i < n; i++) { ORDER[i] = i; PH[i] = rnd(i * 3 + 1) * 0.6; }
+  }
+
+  function scatter() {
+    for (let i = 0; i < N; i++) {
+      FX[i] = X[i] = (rnd(i * 7 + 3) - 0.5) * W * 1.3;
+      FY[i] = Y[i] = (rnd(i * 7 + 4) - 0.5) * H * 1.3;
+      FZ[i] = Z[i] = (rnd(i * 7 + 5) - 0.5) * R * 1.5;
+    }
+  }
+
+  function beginMorph(next, when, keepFrom) {
+    if (!keepFrom) { for (let i = 0; i < N; i++) { FX[i] = X[i]; FY[i] = Y[i]; FZ[i] = Z[i]; } }
+    shape = next;
+    const o = [0, 0, 0];
+    for (let i = 0; i < N; i++) {
+      shapes[shape].fn(i, N, o);
+      TX[i] = o[0]; TY[i] = o[1]; TZ[i] = o[2];
+      const sweep = clamp(((FX[i] + FY[i] * 0.35) / R + 2.2) / 4.4, 0, 1);
+      DELAY[i] = sweep * 0.46 + rnd(i + 11) * 0.05;
+    }
+    fromTilt = curTilt; fromAmp = curAmp;
+    morphStart = when;
+  }
+
+  function measure() {
+    const el = document.querySelector('.copy');
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    box.cx = r.left + r.width / 2; box.cy = r.top + r.height / 2;
+    box.rx = r.width / 2 + 40; box.ry = r.height / 2 + 36;
+  }
+
+  function resize() {
+    W = window.innerWidth; H = window.innerHeight;
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const portrait = H > W;
+    R = portrait ? Math.min(W * 0.4, H * 0.26) : Math.min(W, H) * 0.34;
+    FOV = R * 3.6;
+    LINK = clamp(R * 0.085, 16, 30);
+    MR = clamp(R * 0.5, 90, 170);
+    links = W >= 640;
+    gw = Math.ceil(W / LINK) + 4; gh = Math.ceil(H / LINK) + 4;
+    HEAD = new Int32Array(gw * gh);
+    const n = clamp(Math.round(W * H / 600), 700, 2400);
+    const now = performance.now();
+    if (n !== N) { alloc(n); scatter(); beginMorph(shape, now + 500, true); }
+    else { beginMorph(shape, now, false); }
+    measure();
+  }
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const dt = Math.min(64, now - last); last = now;
+    const time = (now - start) / 1000;
+    let el = now - morphStart;
+    if (el > DUR + HOLD) { beginMorph((shape + 1) % shapes.length, now, false); el = 0; }
+    const gm = ease(clamp(el / DUR, 0, 1));
+    const S = shapes[shape];
+    curTilt = lerp(fromTilt, S.tilt, gm);
+    curAmp = lerp(fromAmp, S.amp, gm);
+
+    rotY += dt * 0.00028 * (reduce ? 0.35 : 1);
+    rotOff += (tRotOff - rotOff) * 0.04;
+    tiltM += (tTiltM - tiltM) * 0.04;
+    const ry = rotY + rotOff, rx = curTilt + tiltM;
+    const cy = Math.cos(ry), sy = Math.sin(ry), cx = Math.cos(rx), sx = Math.sin(rx);
+    const amp = curAmp * R, zmax = R * 1.75, halfW = W / 2, halfH = H / 2;
+    const kx = 3.6 / R, kz = 2.7 / R;
+    const useMouse = mouse.active && !reduce;
+    const decay = Math.pow(0.86, dt / 16.7);
+    const MR2 = MR * MR;
+    const inv = 1 / DUR;
+
+    for (let i = 0; i < N; i++) {
+      let p = clamp((el * inv - DELAY[i]) / 0.47, 0, 1);
+      p = ease(p);
+      const bloom = 1 + 0.2 * Math.sin(Math.PI * p);
+      let x = lerp(FX[i], TX[i], p) * bloom;
+      let y = lerp(FY[i], TY[i], p) * bloom;
+      let z = lerp(FZ[i], TZ[i], p) * bloom;
+      X[i] = x; Y[i] = y; Z[i] = z;
+      y += Math.sin(time * 1.4 + x * kx + z * kz + PH[i]) * amp;
+      const xr = x * cy - z * sy;
+      let zr = x * sy + z * cy;
+      const yr = y * cx - zr * sx;
+      zr = y * sx + zr * cx;
+      const scl = FOV / (FOV - Math.min(zr, R * 2.4));
+      let px = halfW + xr * scl, py = halfH + yr * scl;
+      let boost = 0;
+      if (useMouse) {
+        const dx = px - mouse.x, dy = py - mouse.y, d2 = dx * dx + dy * dy;
+        if (d2 < MR2) {
+          const d = Math.sqrt(d2) || 1;
+          const f = 1 - d / MR;
+          const push = f * f * 4.5 * (dt / 16.7);
+          OX[i] += dx / d * push; OY[i] += dy / d * push;
+          boost = f * 0.45;
+        }
+      }
+      OX[i] *= decay; OY[i] *= decay;
+      px += OX[i]; py += OY[i];
+      SX[i] = px; SY[i] = py; ZR[i] = zr; SC[i] = scl; BO[i] = boost;
+      T[i] = clamp((zr / zmax + 1) * 0.5, 0, 1);
+      const ex = (px - box.cx) / box.rx, ey = (py - box.cy) / box.ry, e = ex * ex + ey * ey;
+      FADE[i] = e < 1 ? 0.28 + 0.72 * e : 1;
+    }
+
+    ctx.fillStyle = NAVY;
+    ctx.fillRect(0, 0, W, H);
+
+    if (links) {
+      HEAD.fill(-1);
+      for (let i = 0; i < N; i++) {
+        CELL[i] = -1;
+        if (T[i] < 0.5) continue;
+        const gx = Math.floor(SX[i] / LINK) + 1, gy = Math.floor(SY[i] / LINK) + 1;
+        if (gx < 1 || gx > gw - 2 || gy < 1 || gy > gh - 2) continue;
+        const c = gy * gw + gx;
+        CELL[i] = c; NEXT[i] = HEAD[c]; HEAD[c] = i;
+      }
+      ctx.lineWidth = 1;
+      const L2 = LINK * LINK;
+      for (let i = 0; i < N; i++) {
+        const c0 = CELL[i];
+        if (c0 < 0) continue;
+        let cnt = 0;
+        const xi = SX[i], yi = SY[i];
+        outer:
+        for (let oy = -1; oy <= 1; oy++) {
+          for (let ox = -1; ox <= 1; ox++) {
+            for (let j = HEAD[c0 + oy * gw + ox]; j !== -1; j = NEXT[j]) {
+              if (j <= i) continue;
+              const dx = SX[j] - xi, dy = SY[j] - yi, d2 = dx * dx + dy * dy;
+              if (d2 >= L2) continue;
+              const d = Math.sqrt(d2);
+              const a = (1 - d / LINK) * LINE_A * Math.min(T[i], T[j]) * Math.min(FADE[i], FADE[j]);
+              if (a < 0.02) continue;
+              const ci = Math.round((T[i] + T[j]) * 0.5 * (NB_C - 1));
+              const ai = Math.min(NB_A - 1, Math.floor(a / LINE_A * NB_A));
+              buckets[ci * NB_A + ai].push(xi, yi, SX[j], SY[j]);
+              if (++cnt >= 3) break outer;
+            }
+          }
+        }
+      }
+      for (let b = 0; b < buckets.length; b++) {
+        const arr = buckets[b];
+        if (arr.length === 0) continue;
+        const ci = Math.floor(b / NB_A), ai = b % NB_A;
+        const step = Math.round(ci / (NB_C - 1) * (STEPS - 1));
+        ctx.strokeStyle = 'rgba(' + RGB[step] + ',' + ((ai + 0.5) / NB_A * LINE_A).toFixed(3) + ')';
+        ctx.beginPath();
+        for (let k = 0; k < arr.length; k += 4) { ctx.moveTo(arr[k], arr[k + 1]); ctx.lineTo(arr[k + 2], arr[k + 3]); }
+        ctx.stroke();
+        arr.length = 0;
+      }
+    }
+
+    ORDER.sort((a, b) => ZR[a] - ZR[b]);
+    const sizeScale = R / 320;
+    const last_i = STEPS - 1;
+    for (let k = 0; k < N; k++) {
+      const i = ORDER[k];
+      const px = SX[i], py = SY[i];
+      if (px < -80 || px > W + 80 || py < -80 || py > H + 80) continue;
+      const t = T[i];
+      const tc = clamp(t + BO[i], 0, 1);
+      const a = (0.15 + 0.85 * t * t) * FADE[i];
+      const size = (1.4 + 2.4 * t + BO[i] * 2) * SC[i] * sizeScale;
+      const d = size * 5;
+      ctx.globalAlpha = a;
+      ctx.drawImage(sprites[Math.round(tc * last_i)], px - d / 2, py - d / 2, d, d);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  window.addEventListener('pointermove', e => {
+    mouse.x = e.clientX; mouse.y = e.clientY; mouse.active = true;
+    tRotOff = (e.clientX / W - 0.5) * 0.7;
+    tTiltM = (e.clientY / H - 0.5) * 0.4;
+  }, { passive: true });
+  document.documentElement.addEventListener('mouseleave', () => { mouse.active = false; });
+  window.addEventListener('pointerdown', e => {
+    mouse.x = e.clientX; mouse.y = e.clientY; mouse.active = true;
+    beginMorph((shape + 1) % shapes.length, performance.now(), false);
+  });
+  window.addEventListener('pointerup', () => { if (!window.matchMedia('(hover: hover)').matches) setTimeout(() => { mouse.active = false; }, 300); });
+
+  let rt = 0;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(resize, 120); });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { hiddenAt = performance.now(); }
+    else if (hiddenAt) {
+      const gap = performance.now() - hiddenAt;
+      morphStart += gap; start += gap; last = performance.now(); hiddenAt = 0;
+    }
+  });
+
+  const ready = () => {
+    document.body.classList.add('ready');
+    setTimeout(measure, 50);
+    setTimeout(measure, 2600);
+  };
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(ready); setTimeout(ready, 1800); }
+  else { ready(); }
+
+  buildSprites();
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
